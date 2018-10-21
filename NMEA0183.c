@@ -3,16 +3,16 @@
 *** 		GNSS NEMA0183数据解析，支持对：RMC、GSV、GLL、TVS、GGA、GSA数据包的解析	
 ***			库函数调用示例如下：
 ***       char buff[];  //该缓冲区中存有协议数据
-***       unsigned int count = 0;  //定义存储帧数据的个数
-***				init_gps_message(get_gps_message()); //初始化库内部定义的gps_message
-***       for(int i=0; i<val_count; ++i)  //val_count表示缓冲区中有效数据个数
-***				{			
-***     		if(get_nmea_frame(buff, nmea_buff, &gpscount) //按字符解析，如果得到一帧数据，则为真
+***       char nmea_buff[]; //存储一帧NMEA数据 
+***       unsigned int count = 0;              //定义存储帧数据的个数
+***		  init_gps_message(get_gps_message()); //初始化库内部定义的gps_message
+***       for(int i=0; i<count; ++i)  		   //count表示缓冲区中有效数据个数
+***		  {			
+***     	if(get_nmea_frame(buff[i], &nmea_buff[0], &count) //按字符解析，如果得到一帧数据，则为真
 ***       	{
-***						nema_message_parse(nmea_buff, get_gps_message(), gpscount); //对一帧数据进行解析
-***					}
-***					++buff;
-***				}
+***				nema_message_parse(nmea_buff[], get_gps_message(), count); //对一帧数据进行解析
+***			}
+***		  }
 ***       解析成功后，可通过调用内置的gpsMsg、gpgsv、gbgsv、gbgsv，获取定位信息和卫星状态
 *** 
 ***
@@ -22,6 +22,7 @@
 
 
 #include "NMEA0183.h"
+#include <stdio.h>
 
 char nmea_buff[NMEA0183_FRAME_MAX_LEN] = {0};   //一帧数据缓冲区，供外部调用
 gps_message gpsMsg; //全局gps数据信息
@@ -169,7 +170,7 @@ void init_gps_message(gps_message* gpsMsg)
 	if(0!=gpsMsg)
 	{
 		gpsMsg->data_val = false;
-		gpsMsg->fix_mode = 0;
+		gpsMsg->fix_mode = '0';
 		gpsMsg->lat_direc = 'N';
 		gpsMsg->scan_satellite_count = 0;
 		gpsMsg->gps_per = 0;
@@ -181,6 +182,7 @@ void init_gps_message(gps_message* gpsMsg)
 		gpsMsg->gb_scan_count = 0;
 		gpsMsg->gl_scan_count = 0;
 		gpsMsg->val = 0;
+		gpsMsg->groundSpeed = 0.0;
 	#if IMPORT_FLOAT==1
 		gpsMsg->altitude = 0.0;
 		gpsMsg->latitude = 0.0;
@@ -201,7 +203,7 @@ bool get_nmea_frame(char usartC, char* frame, unsigned int* cou)
 	static unsigned char flag = NMEA_NO;	
 	static unsigned int count = 0;				
 	static char crc[2];
-	static unsigned int crcSum;
+	static unsigned int crcSum = 0;
 	
 	if(0==frame) return false;
 		
@@ -232,6 +234,7 @@ bool get_nmea_frame(char usartC, char* frame, unsigned int* cou)
 				count = 0;
 				crc[0] = crc[1] = 0;
 				crcSum = 0;
+				*cou = 0;
 			}
 			break;
 		}
@@ -307,7 +310,7 @@ void nema_message_parse(char* frame, gps_message* pos, unsigned int len)
 		
 	}else if(!strcmp(msg,GPGSV) || !strcmp(msg,GNGSV) || !strcmp(msg,GLGSV) || !strcmp(msg,GBGSV ))
 	{
-		gsv_parse(frame, pos, len); //GSV
+//		gsv_parse(frame, pos, len); //GSV,测试发现问题 
 		
 	}else if(!strcmp(msg,GPRMC) || !strcmp(msg,GNRMC) || !strcmp(msg,GLRMC) || !strcmp(msg,GBRMC))	
 	{
@@ -691,6 +694,7 @@ void gga_parse(char* frame, gps_message* pos, unsigned int len)
 					{
 						case 'P':
 						{
+							pos->use_satellite_count = (buff[0]-0x30)*10+buff[1]-0x30;
 							break;
 						}
 						case 'L':
@@ -943,7 +947,29 @@ void vtg_parse(char* frame, gps_message* pos, unsigned int len)
 					
 				}else if(7==count) //字段7 水平运动速度0.00
 				{
-					
+					unsigned char t = 0;
+					char y = -1;
+					unsigned char dotflag = 0;
+					float xiaoshu = 0.0;
+					pos->groundSpeed = 0;
+					for( t=0; '\0'!=buff[t]; ++t)
+					{
+						if('.'==buff[t])
+						{
+							dotflag = 1;
+							continue;
+						}
+						if(dotflag)
+						{
+							xiaoshu += (buff[t]-'0')*pow(10,y);
+							--y;
+							if(y<-3)
+								break;
+							continue;
+						}
+						pos->groundSpeed += (buff[t]-'0')*pow(10,t);
+					}
+					pos->groundSpeed += xiaoshu;					
 				}
 		  }
 			index = 0;		
@@ -1083,6 +1109,14 @@ void set_gps_vdop_str(char* str,unsigned char len)
 {
 	init_char_buff(get_gps_vdop_str(), 5, '-');
 	copy_string(get_gps_vdop_str(),str,4);   //字符串复制的长度由字符串结束符号与设置的长度决定
+}
+
+/* 判断GPS是否已经定位 */
+bool gps_valid(gps_message* gps)
+{
+	if(gps->data_val && gps->fix_mode>'0')
+		return true;
+	return false;
 }
 //垂直经度   end
 /* END  */

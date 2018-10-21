@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define IMPORT_FLOAT 0   //支持浮点运算 1支持
+#define IMPORT_FLOAT 1   //支持浮点运算 1支持
 
 	#define GPGSA	 "GPGSA"
 	#define GPGGA  "GPGGA"
@@ -72,6 +72,7 @@
 		float hdop;	//水平精度
 		float vdop;	//垂直精度
 	#endif
+		float groundSpeed;
 		char lat_direc;
 		char long_direc;
 		/*
@@ -161,6 +162,8 @@
 	
 	void reset_gps_gsv(gps_gsv* gsv);
 	unsigned char get_gps_msg_val(void);
+	
+	bool gps_valid(gps_message* gps);
 	
 	#define NMEA0183_FRAME_MAX_LEN		100   //NMEA数据帧的最大长度
 	extern char nmea_buff[NMEA0183_FRAME_MAX_LEN];//外部调用，可将解析成功的一帧数据保存在该缓冲区中get_nmea_frame()和nema_message_parse()函数调用
