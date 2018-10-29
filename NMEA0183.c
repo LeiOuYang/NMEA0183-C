@@ -202,7 +202,7 @@ bool get_nmea_frame(char usartC, char* frame, unsigned int* cou)
 {
 	static unsigned char flag = NMEA_NO;	
 	static unsigned int count = 0;				
-	static char crc[2];
+	static char crc[2] = {0};
 	static unsigned int crcSum = 0;
 	
 	if(0==frame) return false;
@@ -212,7 +212,13 @@ bool get_nmea_frame(char usartC, char* frame, unsigned int* cou)
 		case NMEA_NO:
 		{
 			if('$'==usartC)    //识别到开始符'$'    
+			{
 				flag = NMEA_START;	
+				count = 0;
+				crc[0] = crc[1] = 0;
+				crcSum = 0;
+				*cou = 0;
+			}
 			break;
 		}
 		case NMEA_START:
@@ -694,7 +700,7 @@ void gga_parse(char* frame, gps_message* pos, unsigned int len)
 					{
 						case 'P':
 						{
-							pos->use_satellite_count = (buff[0]-0x30)*10+buff[1]-0x30;
+							//pos->use_satellite_count = (buff[0]-0x30)*10+buff[1]-0x30;
 							break;
 						}
 						case 'L':
@@ -708,7 +714,7 @@ void gga_parse(char* frame, gps_message* pos, unsigned int len)
 						}
 						case 'N':
 						{
-							pos->use_satellite_count = (buff[0]-0x30)*10+buff[1]-0x30;  
+							pos->use_satellite_count = (buff[0]-'0')*10+buff[1]-'0';  
 							break;
 						}
 						default: break;
@@ -884,6 +890,14 @@ void gll_parse(char* frame, gps_message* pos, unsigned int len)
 				}else if(5==count) //字段5 utc time
 				{
 					set_gps_utc_time_str(buff);	
+				}else if(6==count)
+				{
+					if(buff[0]=='A')
+					{
+						pos->data_val = true;
+					}else{
+						pos->data_val = false;
+					}
 				}
 		  }
 			index = 0;		
@@ -893,12 +907,7 @@ void gll_parse(char* frame, gps_message* pos, unsigned int len)
 	
 	if(count>0) //字段6 定位状态 A-有效  V-未定位
 	{
-		if(buff[0]=='A')
-		{
-			pos->data_val = true;
-		}else{
-			pos->data_val = false;
-		}
+
 	}
 }
 //end function
@@ -1032,6 +1041,7 @@ void set_gps_altitude_str(char* str, unsigned int len)
 char* get_gps_utc_date_str(void)
 {
 	static char date[]={"DDMMYY"};
+	//static char date[]={"211018"};
 	
 	return &date[0];
 }
@@ -1119,4 +1129,98 @@ bool gps_valid(gps_message* gps)
 	return false;
 }
 //垂直经度   end
+
+unsigned char char_to_int(char c)
+{
+	if(c>='0' && c<='9')
+		return c-'0';
+	else return 0;
+}
+
+/* 时间转换 */
+void local_time(char* ddmmyy, char* hhmmss, unsigned char localTimeArea)
+{
+	unsigned char hour = 0;
+	unsigned char dayadd = 0;
+	unsigned char yearflag = 0; 
+	unsigned char monthflag = 0;
+	unsigned char day = 0;
+	unsigned char month = 0;
+	unsigned int year = 0;
+	
+	if(0==hhmmss || 0==ddmmyy) return;
+	
+	hour = 	10*char_to_int(hhmmss[0]) + char_to_int(hhmmss[1]) + localTimeArea;
+	
+	if(hour>=24)
+		dayadd = 1;
+	
+	hour %= 24;	
+	year = 2000 + 10*char_to_int(ddmmyy[4]) + char_to_int(ddmmyy[5]);
+	month = 10*char_to_int(ddmmyy[2]) + char_to_int(ddmmyy[3]);
+	day = 10*char_to_int(ddmmyy[0]) + char_to_int(ddmmyy[1]);
+	
+	if( (0==year%4 && 0!=year%400) || 0==year%400 )
+	{
+		yearflag = 1;
+	}		
+		
+	if(day>=28 && day<=31 && dayadd)
+	{
+		switch(month)
+		{
+			/* 31天月份 */ 
+			case 1:
+			case 3:
+			case 5:
+			case 7:
+			case 8:
+			case 10:
+			case 12:
+				if(31==day)
+				{
+					monthflag = 1;
+				}					 
+				break;
+			
+			/* 闰年29天，正常28天  */
+			case 2:
+				if(29==day || (28==day && !yearflag))
+				{
+					monthflag = 1;
+				}
+				break;
+				
+			/* 30天月份 */ 
+			default:
+				if(30==day)
+				{
+					monthflag = 1;
+				}
+				break; 
+		}
+		if(monthflag)
+		{
+			month += 1;
+			if(month>12) 
+			{
+				year+=1;
+				month = 1;
+			}
+			day = 1;
+		}else
+		{
+			day += 1;
+		}
+	}
+	
+	hhmmss[0] = hour/10 + '0';
+	hhmmss[1] = hour%10 + '0';
+	ddmmyy[0] = day/10 + '0';
+	ddmmyy[1] = day%10 + '0';
+	ddmmyy[2] = month/10 + '0';
+	ddmmyy[3] = month%10 + '0';
+	ddmmyy[4] = (year%100)/10 + '0';
+	ddmmyy[5] = year%10 + '0';
+} 
 /* END  */

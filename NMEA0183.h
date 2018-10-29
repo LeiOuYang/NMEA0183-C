@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#define IMPORT_FLOAT 1   //支持浮点运算 1支持
+#define IMPORT_FLOAT 0   //支持浮点运算 1支持
 
 	#define GPGSA	 "GPGSA"
 	#define GPGGA  "GPGGA"
@@ -124,6 +124,7 @@
 	bool init_char_buff(char* buff, unsigned int num, char value);
 	bool get_nmea_frame(char usartC, char* frame, unsigned int* cou);//获取一帧数据 开始数据'$' 结束数据'*' 其后为两个字节校验位
 	unsigned char hex_to_uint(char c); 			 //字符转换为整数
+	unsigned char char_to_int(char c);
 	void nema_message_parse(char* frame, gps_message* pos, unsigned int len);		 //解析得到信息段
 	
 	void rmc_parse(char* frame, gps_message* pos, unsigned int len);  //解析RMC数据，建议最小定位信息
@@ -159,6 +160,8 @@
 	void set_gps_pdop_str(char* str, unsigned char len);
 	void set_gps_hdop_str(char* str, unsigned char len);
 	void set_gps_vdop_str(char* str, unsigned char len);
+	
+	void local_time(char* ddmmyy, char* hhmmss, unsigned char localTimeArea);
 	
 	void reset_gps_gsv(gps_gsv* gsv);
 	unsigned char get_gps_msg_val(void);
