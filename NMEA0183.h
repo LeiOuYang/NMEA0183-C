@@ -1,179 +1,134 @@
-
-#ifndef UBLOX_NMEA0183_H
-#define UBLOX_NMEA0183_H
-#include <stdbool.h>
-#include <stdlib.h>
-#include <math.h>
-
-#define IMPORT_FLOAT 0   //支持浮点运算 1支持
-
-	#define GPGSA	 "GPGSA"
-	#define GPGGA  "GPGGA"
-	#define GPGSV  "GPGSV"
-	#define GPRMC  "GPRMC"
-	#define GPVTG  "GPVTG"
-	#define GPGLL  "GPGLL"
-	
-	#define GNGSA	 "GNGSA"
-	#define GNGGA  "GNGGA"
-	#define GNGSV  "GNGSV"
-	#define GNRMC  "GNRMC"
-	#define GNVTG  "GNVTG"
-	#define GNGLL  "GNGLL"
-	
-	#define GLGSA	 "GLGSA"
-	#define GLGGA  "GLGGA"
-	#define GLGSV  "GLGSV"
-	#define GLRMC  "GLRMC"
-	#define GLVTG  "GLVTG"
-	#define GLGLL  "GLGLL"
-	
-	#define GBGSA	 "GBGSA"
-	#define GBGGA  "GBGGA"
-	#define GBGSV  "GBGSV"
-	#define GBRMC  "GBRMC"
-	#define GBVTG  "GBVTG"
-	#define GBGLL  "GBGLL"
-	
-	#define BDGSA	 "BDGSA"
-	#define BDGGA  "BDGGA"
-	#define BDGSV  "BDGSV"
-	#define BDRMC  "BDRMC"
-	#define BDVTG  "BDVTG"
-	#define BDGLL  "BDGLL"
-	
-	#define NMEA_NO	0
-	#define NMEA_START 1 
-	#define NMEA_CRC1 2
-	#define NMEA_CRC2 3
-	#define NMEA_END 4
-	
-//define enum
-	typedef enum _gps_message_flag
-	{
-		GPS_MSG_NO = 0,
-		GPS_MSG_GGA, 	//定位信息
-		GPS_MSG_GSA,  //当前卫星信息
-		GPS_MSG_GSV,	//可见卫星信息
-		GPS_MSG_RMC,	//推荐定位信息数据格式	
-		GPS_MSG_VTG,  //地面速度信息
-		GPS_MSG_GLL,  //地理定位信息
-	}gps_message_flag;
-//end enum define 
-	
-//define the gps message struct	
-	typedef struct _gps_message
-	{
-	#if IMPORT_FLOAT==1  //支持浮点运算
-		double longitude;  //经度
-		double latitude;   //纬度
-		double altitude;	 //高度
-		float pdop; //位置精度
-		float hdop;	//水平精度
-		float vdop;	//垂直精度
-	#endif
-		float groundSpeed;
-		char lat_direc;
-		char long_direc;
-		/*
-		*  B  L  P
-		*	 3  2  1
-		*  0  0  1  - GPS
-		*  0  1  1  - GPS+格林奈斯 
-		*  1  0  1  - GPS+BD
-		*  0  1  1  - BD+格林奈斯 
-		*  0  1  0  - 格林奈斯 
-		*  1  1  0  - BD+格林奈斯 
-		*  1  0  0  - BD
-		*  1  1  1  - GPS+格林奈斯+BD
-		*/
-		unsigned char sttl_class;           //当前使用的星种 
-		unsigned char scan_satellite_count; //收到卫星信号的总数
-		unsigned char use_satellite_count; //正在使用的卫星个数
-		unsigned char gp_scan_count;       //扫描
-		unsigned char gb_scan_count;
-		unsigned char gl_scan_count;
-//		unsigned char gp_use_count;				//使用
-//		unsigned char gb_use_count;
-//		unsigned char gl_use_count;
-		unsigned char gps_per; 		/*GPS状态 0-不可用fix not，1-单点定位GPS FIX
-															*2-差分定位DGPS，3-无效PPS，4-实时差分定位RTK FIX
-															*5-RTK FLOAT，6-正在估算*/
-		bool data_val;   //定位数据有效
-		unsigned char mode; //定位模式、手动或者自动 A  M
-		unsigned char fix_mode; //定位类型 1 = 未定位, 2 = 二维定位, 3 = 3维定位
-		unsigned char val;     //数据有效
-	}gps_message;
-//end gps_message struct
-
-//定义保存卫星信息的结构体	
-	typedef struct _gps_gsv
-	{
-		unsigned char enable;  //占用状态  1-占用  0-没有占用，表示新的卫星信息可以保存在其中
-		unsigned char prn_number;
-		unsigned char db;		
-	}gps_gsv;
-//end gps_gsv define 
+/*
+*				GPS NMEA0183协议简要解析框架 
+*	
+*	支持解析 RMC、GGA、VTG、HDT等消息字段信息，由于解析框架比较明了，
+*   移植源码者可自行考虑添加新的解析代码。
+*   解析方式采用逐个字段解析的方式，能很大程度上节省消耗内存空间。 
+*   重新编写数据转换函数，不依赖外部库，移植时一般只需包含NMEA0183.h
+*   文件即可。 
+*
+*   代码示例：
+*   	
+		char nmea[] = \
+		"$GNRMC,102219.00,A,2239.11578,N,11406.59325,E,0.009,,291018,,,D*62\r\n"\
+		"$GNVTG,,T,,M,0.009,N,0.017,K,D*37\r\n"\
+		"$GNGGA,102220.00,2239.11583,N,11406.59338,E,2,09,1.30,112.7,M,-2.3,M,,0000*52\r\n";
 		
-	/* 函数接口 */
-	bool is_digital(char d);
-#if IMPORT_FLOAT==1  //字符串转换浮点函数
-	double string_to_float(char* str, unsigned len);
+		gps_nmea gps_nmea_temp;   /// 定义解析时用到的暂存状态数据,只供解析时使用 
+		gps_data gps_data1;       /// GPS解析得到的最终数据，用户可使用 
+		unsigned int index = 0;
+		
+		for(index=0; index<sizeof(nmea); ++index)
+		{
+			if(nmea_decode(&gps_nmea_temp, &gps_data1, nmea[index])) ///调用解析函数
+			{
+				/// 解析消息段成功 
+				... 
+			} 
+		} 
+		
+*   NMEA0183解析代码思想来源于开源飞控代码(Ardupilot)，所以该份代码开源，可免费使用。
+*   ( 如有Bug，望能反馈 ! QQ: 2281280195 ) 
+*       
+*   作者： ouyanglei      	时间：2018-11-16
+*/
+
+
+#ifndef NMEA0183_H
+#define NMEA0183_H
+
+/*************** 宏定义  *******************/ 
+#define current_time_ms() 1
+
+/* 检查字符串是否为数字0-9 */ 
+#define IS_DIGITAL(x) ( ((x)>='0'&&(x)<='9')||(x)=='-'||(x)=='.' )
+#define CHAR_TO_DIGITAL(x) ((x)-'0')
+#define DIGITAL_TO_CHAR(x) ( (x)+'0' )
+
+/**************** 枚举量定义 ***************/
+	/* 解析字段枚举量 */ 
+    typedef enum _sentence_types 
+	{   /* 每个枚举量表示该字段的起始位置，有些特殊字段需要10个字段域 */ 
+        GPS_SENTENCE_RMC = 32,     /* RMC字段 */
+        GPS_SENTENCE_GGA = 64,		/* GGA字段 */
+        GPS_SENTENCE_VTG = 96,		/* VTG字段 */
+        GPS_SENTENCE_HDT = 128,    /* HDT字段 */
+        GPS_SENTENCE_OTHER = 0     /* 默认没有字段 */
+    }sentence_types;
+
+/**************** 结构体定义 ***************/    
+    /* GPS定位状态枚举量 */ 
+    typedef enum _gps_status
+	{
+        NO_GPS = 0,              /* 无GPS */
+        NO_FIX,                  /* 接收到GPS信息，但没有定位 */
+        GPS_OK_FIX_2D,           /* 2D定位 */
+        GPS_OK_FIX_3D,           /* 3D定位 */ 
+        GPS_OK_FIX_3D_DGPS,      /* 优于3D定位 */ 
+        GPS_OK_FIX_3D_RTK_FLOAT, /* RTK浮点解状态 */ 
+        GPS_OK_FIX_3D_RTK_FIXED, /* RTK固定解状态 */
+    }gps_status;
+    
+    /* GPS点位置 */ 
+    typedef struct _location 
+	{
+	    int alt:24;         /* 海拔高度 meters * 100  单位为厘米 */
+	    float lat;            /* 纬度 *  暂时不乘以10**7，原始保存*/
+	    float lng;            /* 精度 *  暂时不乘以10**7，原始保存*/
+	}Location;
+    
+    /* 数据解析状态结构体定义 */
+    typedef struct _gps_nmea
+    {
+    	/* 数据解析状态 */ 
+    	unsigned char parity;    		   /* 校验计算和 */ 
+    	unsigned char is_checksum_term;    /* 当前字段域为校验字 */
+    	char term[15];           		   /* 当前字段域缓冲区，','为字段域分割符 */
+    	unsigned char sentence_type;       /* 字段类别，见枚举 sentence_types*/
+    	unsigned char term_number;         /* 当前字段域序号 */
+    	unsigned char term_offset;         /* 字段域数据偏移量 */
+    	unsigned char gps_data_good;       /* GPS数据有效状态 */
+    	
+    	/* 数据解析结果 */
+    	unsigned int new_time;                  /* UTC时间 */
+    	unsigned int new_date;                  /* UTC日期 */
+    	float new_latitude;             		/* 纬度 */
+    	float new_longitude;            		/* 经度 */
+    	int new_altitude;             			/* 海拔高度 cm*/
+    	float new_speed;                		/* 地速 km/h */
+    	float new_course;               		/* RMC、VTG字段磁偏角信息*/
+    	float new_gps_yaw;              		/* HDT航向信息 */
+    	unsigned short new_hdop;                /* 水平精度 *100 */
+    	unsigned char new_satellite_count;      /* 当前使用卫星的颗数 */
+    	unsigned char new_quality_indicator;    /* 定位状态 */
+
+    	unsigned int last_RMC_ms;         	    /* 最后更新字段时间 */
+    	unsigned int last_GGA_ms;
+    	unsigned int last_VTG_ms;
+   		unsigned int last_HDT_ms;
+	}gps_nmea;
+	
+	/* GPS数据区域，供上层应用调用 */ 
+	typedef struct _gps_data {
+        unsigned char instance; 		   /* GPS实例个数 */ 
+        gps_status status;                 /* GPS定位状态 */
+        unsigned int time_week_ms;         /* GPS time (milliseconds from start of GPS week)*/ 
+        unsigned short time_week;          /* GPS星期号 */ 
+        Location location;                 /* GPS定位到的当前位置 */
+        float ground_speed;                /* 地速  m/s */
+        float ground_course;               /* 地速航向  度  顺时针 0-360 */ 
+        float gps_yaw;                     /* GPHDT字段航向信息 一般用于双天线测向 */
+        unsigned short hdop;               /* 水平精度  cm */
+        unsigned short vdop;               /* 垂直精度  cm */
+        unsigned char num_sats;            /* 可见卫星颗数 */
+        unsigned char have_gps_yaw;        /* GPHDT航向字段有效 */
+        unsigned int last_gps_time_ms;     /* 最后获取GPS信息时的时间  ms */
+    }gps_data;
+    
+/**************** 函数定义 ***************/
+
+unsigned char nmea_decode(gps_nmea* pnmea, gps_data* pdata, char c);
+
 #endif
-	static void copy_string(char* dest,char *src,unsigned int num);
-	bool init_char_buff(char* buff, unsigned int num, char value);
-	bool get_nmea_frame(char usartC, char* frame, unsigned int* cou);//获取一帧数据 开始数据'$' 结束数据'*' 其后为两个字节校验位
-	unsigned char hex_to_uint(char c); 			 //字符转换为整数
-	unsigned char char_to_int(char c);
-	void nema_message_parse(char* frame, gps_message* pos, unsigned int len);		 //解析得到信息段
-	
-	void rmc_parse(char* frame, gps_message* pos, unsigned int len);  //解析RMC数据，建议最小定位信息
-	void gsv_parse(char* frame, gps_message* pos, unsigned int len);  //解析GSV数据，可视卫星格式
-	void gsa_parse(char* frame, gps_message* pos, unsigned int len);  //解析GSA数据，GPS精度指针及使用卫星格式
-	void gll_parse(char* frame, gps_message* pos, unsigned int len);  //解析GLL数据
-	void gga_parse(char* frame, gps_message* pos, unsigned int len);  //解析GGA数据，固定数据输出
-	void vtg_parse(char* frame, gps_message* pos, unsigned int len);  //解析VTG数据，地面速度信息
-	
-	static void update_stll_msg(gps_gsv* gsvMsg, unsigned char len, unsigned char prn, unsigned char dbh);  //更新卫星的信息
-	
-	gps_message* get_gps_message(void);
-	void init_gps_message(gps_message* gpsMsg);
-	
-		/*获取GPS信息经度、纬度、高度等*/
-	char* get_gps_longitude_str(void);  
-	char* get_gps_latitude_str(void);
-	char* get_gps_altitude_str(void);
-	char* get_gps_utc_date_str(void);
-	char* get_gps_utc_time_str(void);
-	char* get_gps_utc_str(void);
-	char* get_utc(char* buff);
-	char* get_gps_pdop_str(void);
-	char* get_gps_hdop_str(void);
-	char* get_gps_vdop_str(void);
-	unsigned char get_db_average(void);
-	
-	void set_gps_longitude_str(char* str);  
-	void set_gps_latitude_str(char* str);
-	void set_gps_altitude_str(char* str, unsigned int len);
-	void set_gps_utc_date_str(char* str);
-	void set_gps_utc_time_str(char* str);
-	void set_gps_pdop_str(char* str, unsigned char len);
-	void set_gps_hdop_str(char* str, unsigned char len);
-	void set_gps_vdop_str(char* str, unsigned char len);
-	
-	void local_time(char* ddmmyy, char* hhmmss, unsigned char localTimeArea);
-	
-	void reset_gps_gsv(gps_gsv* gsv);
-	unsigned char get_gps_msg_val(void);
-	
-	bool gps_valid(gps_message* gps);
-	
-	#define NMEA0183_FRAME_MAX_LEN		100   //NMEA数据帧的最大长度
-	extern char nmea_buff[NMEA0183_FRAME_MAX_LEN];//外部调用，可将解析成功的一帧数据保存在该缓冲区中get_nmea_frame()和nema_message_parse()函数调用
-	extern gps_message gpsMsg;
-	extern gps_gsv gpgsv[12];  
-	extern gps_gsv glgsv[12];  
-	extern gps_gsv gbgsv[12];
-	
-#endif /* UBLOX_NMEA0183_H */
+
 
