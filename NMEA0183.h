@@ -125,9 +125,17 @@
         unsigned int last_gps_time_ms;     /* 最后获取GPS信息时的时间  ms */
     }gps_data;
     
+    /* NMEA0183结构体对象 */
+    typedef struct _nmea0183
+	{
+		gps_nmea gpsParse;
+		gps_data gpsData;
+		unsigned char (*nmea_decode)(struct _nmea0183* pnmea, char c);		
+	}NMEA0183; 
+    
 /**************** 函数定义 ***************/
 
-unsigned char nmea_decode(gps_nmea* pnmea, gps_data* pdata, char c);
+unsigned char nmea_decode(NMEA0183* pnmea, char c);
 
 #endif
 

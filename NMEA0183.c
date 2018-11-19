@@ -12,44 +12,44 @@ static double string_to_float(const char* pstr, unsigned char* b);
 static int sring_to_int(const char* pstr, unsigned char* b); 
 
 /* GPS数据解析 */ 
-unsigned char nmea_decode(gps_nmea* pnmea, gps_data* pdata, char c)
+unsigned char nmea_decode(NMEA0183* nmea, char c)
 {
     unsigned char valid_sentence = 0;
     
-	if((void*)0==pnmea || (void*)0==pdata) return 0;
+	if((void*)0==nmea) return 0;
 
     switch (c) 
 	{
 	    case ',':  /* 字段域分割符号 */ 
-	        pnmea->parity ^= c;
+	        nmea->gpsParse.parity ^= c;
 	        /* no break */
 	    case '\r':
 	    case '\n':
 	    case '*':
-	        if (pnmea->term_offset < sizeof(pnmea->term)) 
+	        if (nmea->gpsParse.term_offset < sizeof(nmea->gpsParse.term)) 
 			{
-	            pnmea->term[pnmea->term_offset] = 0;
-	            valid_sentence = nmea_term_complete(pnmea, pdata);
+	            nmea->gpsParse.term[nmea->gpsParse.term_offset] = 0;
+	            valid_sentence = nmea_term_complete(&nmea->gpsParse, &nmea->gpsData);
 	        }
-	        ++pnmea->term_number;
-	        pnmea->term_offset = 0;
-	        pnmea->is_checksum_term = (c == '*');   /* 后面两个字节为校验字段 */ 
+	        ++nmea->gpsParse.term_number;
+	        nmea->gpsParse.term_offset = 0;
+	        nmea->gpsParse.is_checksum_term = (c == '*');   /* 后面两个字节为校验字段 */ 
 	        return valid_sentence;
 	
 	    case '$': /* 字段信息开始 */ 
-	        pnmea->term_number = pnmea->term_offset = 0;
-	        pnmea->parity = 0;
-	        pnmea->sentence_type = GPS_SENTENCE_OTHER;
-	        pnmea->is_checksum_term = 0;
-	        pnmea->gps_data_good = 0;
+	        nmea->gpsParse.term_number = nmea->gpsParse.term_offset = 0;
+	        nmea->gpsParse.parity = 0;
+	        nmea->gpsParse.sentence_type = GPS_SENTENCE_OTHER;
+	        nmea->gpsParse.is_checksum_term = 0;
+	        nmea->gpsParse.gps_data_good = 0;
 	        return valid_sentence;
     }
 
     /* 保存字段域数据 */
-    if (pnmea->term_offset < sizeof(pnmea->term) - 1)
-        pnmea->term[pnmea->term_offset++] = c;
-    if (!pnmea->is_checksum_term)
-        pnmea->parity ^= c;
+    if (nmea->gpsParse.term_offset < sizeof(nmea->gpsParse.term) - 1)
+        nmea->gpsParse.term[nmea->gpsParse.term_offset++] = c;
+    if (!nmea->gpsParse.is_checksum_term)
+        nmea->gpsParse.parity ^= c;
 
     return valid_sentence;
 }
@@ -132,7 +132,7 @@ static unsigned char nmea_term_complete(gps_nmea* pnmea, gps_data* pdata)
 	                    break;
 	                case GPS_SENTENCE_VTG:
 	                    pnmea->last_VTG_ms = now;
-	                    pdata->ground_speed  = pnmea->new_speed*0.01f;
+	                    pdata->ground_speed  = pnmea->new_speed;
 //	                    pdata->ground_course = wrap_360(pnmea->new_course*0.01f);
 
 	                    // VTG has no fix indicator, can't change fix status
@@ -229,7 +229,6 @@ static unsigned char nmea_term_complete(gps_nmea* pnmea, gps_data* pdata)
         case GPS_SENTENCE_RMC + 3: // Latitude
         case GPS_SENTENCE_GGA + 2:
             pnmea->new_latitude = string_to_float((const char*)pnmea->term, (void*)0);
-            printf("dectect the new lat %f\n", pnmea->new_latitude); 
             break;
         case GPS_SENTENCE_RMC + 4: // N/S
         case GPS_SENTENCE_GGA + 3:
