@@ -40,6 +40,9 @@
 /*************** 宏定义  *******************/ 
 #define current_time_ms() 1
 
+#define GPS_LEAPSECONDS_MILLIS 18000UL
+#define AP_SEC_PER_WEEK   (7UL * 86400UL)
+
 /* 检查字符串是否为数字0-9 */ 
 #define IS_DIGITAL(x) ( ((x)>='0'&&(x)<='9')||(x)=='-'||(x)=='.' )
 #define CHAR_TO_DIGITAL(x) ((x)-'0')
@@ -108,13 +111,22 @@
    		unsigned int last_HDT_ms;
 	}gps_nmea;
 	
+	/* 时间结构体 */ 
+	typedef struct _time
+	{
+		unsigned char year;
+		unsigned short int month : 4;
+		unsigned short int  : 4;
+		unsigned short int day : 5;
+		unsigned short int week : 3;
+	}DateTime;
+	
 	/* GPS数据区域，供上层应用调用 */ 
 	typedef struct _gps_data {
         unsigned char instance; 		   /* GPS实例个数 */ 
         gps_status status;                 /* GPS定位状态 */
-        unsigned int time_week_ms;         /* GPS time (milliseconds from start of GPS week)*/ 
-        unsigned short time_week;          /* GPS星期号 */ 
         Location location;                 /* GPS定位到的当前位置 */
+        DateTime date_time; 
         float ground_speed;                /* 地速  m/s */
         float ground_course;               /* 地速航向  度  顺时针 0-360 */ 
         float gps_yaw;                     /* GPHDT字段航向信息 一般用于双天线测向 */

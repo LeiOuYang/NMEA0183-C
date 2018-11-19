@@ -10,6 +10,7 @@ static unsigned char float_to_string(double value, char* pdest, unsigned int int
 static unsigned char int_to_string(int value, char* pdest, unsigned int intgr) ;
 static double string_to_float(const char* pstr, unsigned char* b); 
 static int sring_to_int(const char* pstr, unsigned char* b); 
+static int make_date_time(gps_data* pdata, unsigned int date, unsigned int time);
 
 /* GPS数据解析 */ 
 unsigned char nmea_decode(NMEA0183* nmea, char c)
@@ -90,8 +91,8 @@ static unsigned char nmea_term_complete(gps_nmea* pnmea, gps_data* pdata)
 	                    pdata->location.lat     = pnmea->new_latitude;
 	                    pdata->location.lng     = pnmea->new_longitude;
 	                    pdata->ground_speed     = pnmea->new_speed;
-//	                    pdata->ground_course    = wrap_360(pnmea->new_course*0.01f);
-//	                    make_gps_time(pnmea->new_date, pnmea->new_time * 10);
+	                    pdata->ground_course    = pnmea->new_course;
+						make_date_time(pdata, pnmea->new_date, pnmea->new_time);
 	                    pdata->last_gps_time_ms = now;
 	                    
 	                    break;
@@ -133,7 +134,7 @@ static unsigned char nmea_term_complete(gps_nmea* pnmea, gps_data* pdata)
 	                case GPS_SENTENCE_VTG:
 	                    pnmea->last_VTG_ms = now;
 	                    pdata->ground_speed  = pnmea->new_speed;
-//	                    pdata->ground_course = wrap_360(pnmea->new_course*0.01f);
+	                    pdata->ground_course = pnmea->new_course;
 
 	                    // VTG has no fix indicator, can't change fix status
 	                    break;
@@ -218,7 +219,7 @@ static unsigned char nmea_term_complete(gps_nmea* pnmea, gps_data* pdata)
         //
         case GPS_SENTENCE_RMC + 1: // Time (RMC)
         case GPS_SENTENCE_GGA + 1: // Time (GGA)
-            pnmea->new_time = (unsigned int)(string_to_float((const char*)pnmea->term, (void*)0)*100);
+            pnmea->new_time = (unsigned int)(string_to_float((const char*)pnmea->term, (void*)0)*1000);  /* ms */ 
             break;
         case GPS_SENTENCE_RMC + 9: // Date (GPRMC)
             pnmea->new_date = (unsigned int)sring_to_int((const char*)pnmea->term, (void*)0);
@@ -228,7 +229,7 @@ static unsigned char nmea_term_complete(gps_nmea* pnmea, gps_data* pdata)
         //
         case GPS_SENTENCE_RMC + 3: // Latitude
         case GPS_SENTENCE_GGA + 2:
-            pnmea->new_latitude = string_to_float((const char*)pnmea->term, (void*)0);
+            pnmea->new_latitude = string_to_float((const char*)pnmea->term, (void*)0)/100.0;
             break;
         case GPS_SENTENCE_RMC + 4: // N/S
         case GPS_SENTENCE_GGA + 3:
@@ -237,7 +238,7 @@ static unsigned char nmea_term_complete(gps_nmea* pnmea, gps_data* pdata)
             break;
         case GPS_SENTENCE_RMC + 5: // Longitude
         case GPS_SENTENCE_GGA + 4:
-            pnmea->new_longitude = string_to_float((const char*)pnmea->term, (void*)0);
+            pnmea->new_longitude = string_to_float((const char*)pnmea->term, (void*)0)/100.0;
             break;
         case GPS_SENTENCE_RMC + 6: // E/W
         case GPS_SENTENCE_GGA + 5:
@@ -476,4 +477,51 @@ static unsigned char int_to_string(int value, char* pdest, unsigned int intgr)
 {
 	return float_to_string((double)value, pdest, intgr,0);
 }
+
+/* 时间处理  传入参数为日月年和毫秒*/ 
+static int make_date_time(gps_data* pdata, unsigned int date, unsigned int time)
+{
+	
+	unsigned char year, mon, day, hour, min, sec;
+    unsigned short int msec;
+    unsigned int v,ret;
+    char rmon;
+    
+    if((void*)0==pdata) return 0;
+
+    year = date % 100;
+    mon  = (date / 100) % 100;
+    day  = date / 10000;
+    
+    pdata->date_time.year = year;
+    pdata->date_time.month = mon;
+    pdata->date_time.day = day;
+
+    v = time;
+    msec = v % 1000; v /= 1000;
+    sec  = v % 100; v /= 100;
+    min  = v % 100; v /= 100;
+    hour = v % 100; v /= 100;
+
+    rmon = mon - 2;
+    if (0 >= rmon) {    
+        rmon += 12;
+        year -= 1;
+    }
+
+    // get time in seconds since unix epoch
+    ret = (year/4) - (GPS_LEAPSECONDS_MILLIS / 1000UL) + 367*rmon/12 + day;
+    ret += year*365 + 10501;
+    ret = ret*24 + hour;
+    ret = ret*60 + min;
+    ret = ret*60 + sec;
+
+    // convert to time since GPS epoch
+    ret -= 272764785UL;
+
+    // get GPS week and time
+    pdata->date_time.week = ret / AP_SEC_PER_WEEK;
+    
+    return 1;
+} 
 
