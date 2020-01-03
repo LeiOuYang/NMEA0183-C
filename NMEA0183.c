@@ -229,7 +229,8 @@ static unsigned char nmea_term_complete(gps_nmea* pnmea, gps_data* pdata)
         //
         case GPS_SENTENCE_RMC + 3: // Latitude
         case GPS_SENTENCE_GGA + 2:
-            pnmea->new_latitude = string_to_float((const char*)pnmea->term, (void*)0)/100.0;
+            pnmea->new_latitude = string_to_float((const char*)pnmea->term, (void*)0)/100.0;   //dd.mmmm
+			pnmea->new_latitude = (float)( ((unsigned int)pnmea->new_latitude) + (pnmea->new_latitude-((unsigned int)pnmea->new_latitude))/60.0 );  //deg
             break;
         case GPS_SENTENCE_RMC + 4: // N/S
         case GPS_SENTENCE_GGA + 3:
@@ -238,7 +239,8 @@ static unsigned char nmea_term_complete(gps_nmea* pnmea, gps_data* pdata)
             break;
         case GPS_SENTENCE_RMC + 5: // Longitude
         case GPS_SENTENCE_GGA + 4:
-            pnmea->new_longitude = string_to_float((const char*)pnmea->term, (void*)0)/100.0;
+            pnmea->new_longitude = string_to_float((const char*)pnmea->term, (void*)0)/100.0;  //dd.mmmmmm   
+			pnmea->new_longitude = (float)(( (unsigned int)pnmea->new_longitude) + (pnmea->new_longitude-((unsigned int)pnmea->new_longitude))/60.0);  //deg
             break;
         case GPS_SENTENCE_RMC + 6: // E/W
         case GPS_SENTENCE_GGA + 5:
