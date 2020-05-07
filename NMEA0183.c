@@ -415,10 +415,13 @@ static unsigned char float_to_string(double value, char* pdest, unsigned int int
 	char* pstr = (void*)0;
 	double fvalue = 0.0;
 	char c = 0;
-	int tvalue = 0;
+	unsigned int tvalue = 0;
 	unsigned char zeroflag = 0;
+	unsigned int tm = 0;
 	
 	if( (void*)0==pdest || 0==intgr ) return 0;
+	
+	if(dec>9) dec = 9;
 	
 	if(1==intgr) zeroflag = 1;
 	
@@ -461,11 +464,13 @@ static unsigned char float_to_string(double value, char* pdest, unsigned int int
 	}
 	
 	*pstr++ = '.';	
-	tvalue = (int)(value*int_pow(10,dec))%int_pow(10,dec);
+	tm = (unsigned int)int_pow(10,dec);
+	tvalue = (unsigned int)( ( (unsigned int)((value-(unsigned int)value)*tm) )%tm );
 	while(dec)
 	{
-		*pstr = DIGITAL_TO_CHAR(tvalue/int_pow(10,dec-1));
-		tvalue = tvalue%int_pow(10,dec-1);
+		tm = int_pow(10,dec-1);
+		*pstr = DIGITAL_TO_CHAR(tvalue/tm);
+		tvalue = tvalue%tm;
 		--dec;
 		++pstr;
 	}
